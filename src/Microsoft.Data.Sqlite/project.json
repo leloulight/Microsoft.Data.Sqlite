@@ -8,9 +8,12 @@
   "frameworks": {
     "net451": {
 <<<<<<< HEAD
+<<<<<<< HEAD
       "dependencies": {
         "Microsoft.Extensions.PlatformAbstractions": "1.0.0-rc1-final"
       },
+=======
+>>>>>>> refs/remotes/aspnet/dev
 =======
 >>>>>>> refs/remotes/aspnet/dev
       "frameworkAssemblies": {
@@ -19,6 +22,7 @@
     },
     "dotnet5.4": {
       "dependencies": {
+<<<<<<< HEAD
 <<<<<<< HEAD
         "System.Collections": "4.0.11-beta-23516",
         "System.ComponentModel": "4.0.1-beta-23516",
@@ -36,6 +40,8 @@
         "System.Text.Encoding": "4.0.11-beta-23516",
         "System.Threading.Tasks": "4.0.11-beta-23516"
 =======
+=======
+>>>>>>> refs/remotes/aspnet/dev
         "System.AppContext": "4.0.1-*",
         "System.Collections": "4.0.11-*",
         "System.ComponentModel": "4.0.1-*",
@@ -58,6 +64,7 @@
     "netcore50": {
       "dependencies": {
 <<<<<<< HEAD
+<<<<<<< HEAD
         "Microsoft.CSharp": "4.0.1-beta-23516",
         "System.Collections": "4.0.11-beta-23516",
         "System.Data.Common": "4.0.1-beta-23516",
@@ -73,6 +80,8 @@
         "System.Text.Encoding": "4.0.11-beta-23516",
         "System.Threading.Tasks": "4.0.11-beta-23516"
 =======
+=======
+>>>>>>> refs/remotes/aspnet/dev
         "System.AppContext": "4.0.0",
         "Microsoft.CSharp": "4.0.0",
         "System.Collections": "4.0.10",
