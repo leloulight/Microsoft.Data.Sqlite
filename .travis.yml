@@ -1,19 +1,25 @@
 language: csharp
-sudo: false
-mono:
-  - beta
-os:
-  - linux
-
+sudo: required
+dist: trusty
 addons:
   apt:
-    sources:
-    - debian-sid
     packages:
+    - gettext
+    - libcurl4-openssl-dev
+    - libicu-dev
+    - libssl-dev
     - libunwind8
-    - sqlite3
-
+    - zlib1g
+env:
+  - KOREBUILD_TEST_DNXCORE=true KOREBUILD_DNU_RESTORE_CORECLR=true MONO_THREADS_PER_CPU=2000 MONO_MANAGED_WATCHER=disabled
+mono:
+  - 4.0.5
+os:
+  - linux
+  - osx
 before_script:
   - sqlite3 -version
+before_install:
+  - if test "$TRAVIS_OS_NAME" == "osx"; then brew update; brew install icu4c; fi
 script:
   - ./build.sh --quiet verify

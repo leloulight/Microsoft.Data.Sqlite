@@ -347,7 +347,7 @@ namespace Microsoft.Data.Sqlite
         }
 
         /// <summary>
-        /// SQLite Error {errorCode}: '{message}'
+        /// SQLite Error {errorCode}: '{message}'.
         /// </summary>
         internal static string SqliteNativeError
         {
@@ -355,11 +355,91 @@ namespace Microsoft.Data.Sqlite
         }
 
         /// <summary>
-        /// SQLite Error {errorCode}: '{message}'
+        /// SQLite Error {errorCode}: '{message}'.
         /// </summary>
         internal static string FormatSqliteNativeError(object errorCode, object message)
         {
             return string.Format(CultureInfo.CurrentCulture, GetString("SqliteNativeError", "errorCode", "message"), errorCode, message);
+        }
+
+        /// <summary>
+        /// For more information on this error code see https://www.sqlite.org/rescode.html
+        /// </summary>
+        internal static string DefaultNativeError
+        {
+            get { return GetString("DefaultNativeError"); }
+        }
+
+        /// <summary>
+        /// For more information on this error code see https://www.sqlite.org/rescode.html
+        /// </summary>
+        internal static string FormatDefaultNativeError()
+        {
+            return GetString("DefaultNativeError");
+        }
+
+        /// <summary>
+        /// Cannot bind the value for parameter '{parameterName}' because multiple matching parameters were found in the command text. Specify the parameter name with the symbol prefix, e.g. '@{parameterName}'.
+        /// </summary>
+        internal static string AmbiguousParameterName
+        {
+            get { return GetString("AmbiguousParameterName"); }
+        }
+
+        /// <summary>
+        /// Cannot bind the value for parameter '{parameterName}' because multiple matching parameters were found in the command text. Specify the parameter name with the symbol prefix, e.g. '@{parameterName}'.
+        /// </summary>
+        internal static string FormatAmbiguousParameterName(object parameterName)
+        {
+            return string.Format(CultureInfo.CurrentCulture, GetString("AmbiguousParameterName", "parameterName"), parameterName);
+        }
+
+        /// <summary>
+        /// The SQLite library is already loaded. UseWinSqlite3 must be called before using SQLite.
+        /// </summary>
+        internal static string AlreadyLoaded
+        {
+            get { return GetString("AlreadyLoaded"); }
+        }
+
+        /// <summary>
+        /// The SQLite library is already loaded. UseWinSqlite3 must be called before using SQLite.
+        /// </summary>
+        internal static string FormatAlreadyLoaded()
+        {
+            return GetString("AlreadyLoaded");
+        }
+
+        /// <summary>
+        /// The {enumType} enumeration value, {value}, is invalid.
+        /// </summary>
+        internal static string InvalidEnumValue
+        {
+            get { return GetString("InvalidEnumValue"); }
+        }
+
+        /// <summary>
+        /// The {enumType} enumeration value, {value}, is invalid.
+        /// </summary>
+        internal static string FormatInvalidEnumValue(object enumType, object value)
+        {
+            return string.Format(CultureInfo.CurrentCulture, GetString("InvalidEnumValue", "enumType", "value"), enumType, value);
+        }
+
+        /// <summary>
+        /// Cannot convert object of type '{sourceType}' to object of type '{targetType}'.
+        /// </summary>
+        internal static string ConvertFailed
+        {
+            get { return GetString("ConvertFailed"); }
+        }
+
+        /// <summary>
+        /// Cannot convert object of type '{sourceType}' to object of type '{targetType}'.
+        /// </summary>
+        internal static string FormatConvertFailed(object sourceType, object targetType)
+        {
+            return string.Format(CultureInfo.CurrentCulture, GetString("ConvertFailed", "sourceType", "targetType"), sourceType, targetType);
         }
 
         private static string GetString(string name, params string[] formatterNames)

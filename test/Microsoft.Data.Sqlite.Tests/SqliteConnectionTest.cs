@@ -4,7 +4,12 @@
 using System;
 using System.Data;
 using System.IO;
+using Microsoft.AspNet.Testing.xunit;
+using Microsoft.Data.Sqlite.Utilities;
+using Microsoft.Extensions.PlatformAbstractions;
 using Xunit;
+
+using static Microsoft.Data.Sqlite.TestUtilities.Constants;
 
 namespace Microsoft.Data.Sqlite
 {
@@ -60,7 +65,8 @@ namespace Microsoft.Data.Sqlite
             Assert.Equal("test.db", connection.DataSource);
         }
 
-        [Fact]
+        [ConditionalFact]
+        [SqliteVersionCondition(Min = "3.7.10")]
         public void DataSource_returns_actual_filename_when_open()
         {
             using (var connection = new SqliteConnection("Data Source=test.db"))
@@ -103,13 +109,21 @@ namespace Microsoft.Data.Sqlite
         }
 
         [Fact]
+        public void Open_adjusts_relative_path()
+        {
+            var connection = new SqliteConnection("Filename=./local.db");
+            connection.Open();
+            Assert.Equal(Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "local.db"), connection.DataSource);
+        }
+
+        [Fact]
         public void Open_throws_when_error()
         {
-            var connection = new SqliteConnection("Data Source=fakeproto://data.db?mode=invalidmode");
+            var connection = new SqliteConnection("Data Source=file:data.db?mode=invalidmode");
 
             var ex = Assert.Throws<SqliteException>(() => connection.Open());
 
-            Assert.Equal(14, ex.SqliteErrorCode);
+            Assert.Equal(SQLITE_ERROR, ex.SqliteErrorCode);
         }
 
         [Fact]
@@ -139,6 +153,75 @@ namespace Microsoft.Data.Sqlite
                 {
                     connection.StateChange -= handler;
                 }
+            }
+        }
+
+        [Fact]
+        public void Open_works_when_readonly()
+        {
+            using (var connection = new SqliteConnection("Data Source=readonly.db"))
+            {
+                connection.Open();
+
+                if (connection.ExecuteScalar<long>("SELECT COUNT(*) FROM sqlite_master WHERE name = 'Idomic';") == 0)
+                {
+                    connection.ExecuteNonQuery("CREATE TABLE Idomic (Word TEXT);");
+                }
+            }
+
+            using (var connection = new SqliteConnection("Data Source=readonly.db;Mode=ReadOnly"))
+            {
+                connection.Open();
+
+                var ex = Assert.Throws<SqliteException>(
+                    () => connection.ExecuteNonQuery("INSERT INTO Idomic VALUES ('arimfexendrapuse');"));
+
+                Assert.Equal(SQLITE_READONLY, ex.SqliteErrorCode);
+            }
+        }
+
+        [Fact]
+        public void Open_works_when_readwrite()
+        {
+            using (var connection = new SqliteConnection("Data Source=readwrite.db;Mode=ReadWrite"))
+            {
+                var ex = Assert.Throws<SqliteException>(() => connection.Open());
+
+                Assert.Equal(SQLITE_CANTOPEN, ex.SqliteErrorCode);
+            }
+        }
+
+        [Fact]
+        public void Open_works_when_memory_shared()
+        {
+            var connectionString = "Data Source=people;Mode=Memory;Cache=Shared";
+
+            using (var connection1 = new SqliteConnection(connectionString))
+            {
+                connection1.Open();
+
+                connection1.ExecuteNonQuery(
+                    "CREATE TABLE Person (Name TEXT);" +
+                    "INSERT INTO Person VALUES ('Waldo');");
+
+                using (var connection2 = new SqliteConnection(connectionString))
+                {
+                    connection2.Open();
+
+                    var name = connection2.ExecuteScalar<string>("SELECT Name FROM Person;");
+                    Assert.Equal("Waldo", name);
+                }
+            }
+        }
+
+        [Fact]
+        public void Open_works_when_uri()
+        {
+            using (var connection = new SqliteConnection("Data Source=file:readwrite.db?mode=rw"))
+            {
+                var ex = Assert.Throws<SqliteException>(() => connection.Open());
+
+                Assert.Equal(SQLITE_CANTOPEN, ex.SqliteErrorCode);
             }
         }
 
@@ -314,6 +397,44 @@ namespace Microsoft.Data.Sqlite
                         Assert.Equal("2B", reader2.GetString(0));
                     }
                 }
+            }
+        }
+
+        [ConditionalFact]
+        [OSSkipCondition(OperatingSystems.MacOSX, SkipReason = "libsqlite on OSX 10.10 is compiled without ability to load extensions")]
+        public void EnableExtensions_works()
+        {
+            using (var connection = new SqliteConnection("Data Source=:memory:"))
+            {
+                connection.Open();
+
+                var sql = "SELECT load_extension('unknown');";
+
+                var ex = Assert.Throws<SqliteException>(() => connection.ExecuteNonQuery(sql));
+                var originalError = ex.Message;
+
+                connection.EnableExtensions();
+
+                ex = Assert.Throws<SqliteException>(() => connection.ExecuteNonQuery(sql));
+                var enabledError = ex.Message;
+
+                connection.EnableExtensions(enable: false);
+
+                ex = Assert.Throws<SqliteException>(() => connection.ExecuteNonQuery(sql));
+                var disabledError = ex.Message;
+
+                Assert.NotEqual(originalError, enabledError);
+                Assert.Equal(originalError, disabledError);
+            }
+        }
+
+        [Fact]
+        public void EnableExtensions_throws_when_closed()
+        {
+            using (var connection = new SqliteConnection("Data Source=:memory:"))
+            {
+                var ex = Assert.Throws<InvalidOperationException>(() => connection.EnableExtensions());
+                Assert.Equal(Strings.FormatCallRequiresOpenConnection("EnableExtensions"), ex.Message);
             }
         }
     }

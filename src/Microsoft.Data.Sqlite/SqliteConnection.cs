@@ -4,20 +4,23 @@
 using System;
 using System.Data;
 using System.Data.Common;
-#if NETCORE50
 using System.Diagnostics;
 using System.IO;
+using Microsoft.Data.Sqlite.Interop;
+
+#if NETCORE50
 using System.Reflection;
 using Microsoft.Data.Sqlite.Utilities;
 #endif
-using Microsoft.Data.Sqlite.Interop;
+
+using static Microsoft.Data.Sqlite.Interop.Constants;
 
 namespace Microsoft.Data.Sqlite
 {
     /// <summary>
     /// Represents a connection with a SQLite database.
     /// </summary>
-    public class SqliteConnection : DbConnection
+    public partial class SqliteConnection : DbConnection
     {
         private const string MainDatabaseName = "main";
 
@@ -60,10 +63,19 @@ namespace Microsoft.Data.Sqlite
 
         public override string Database => MainDatabaseName;
 
-        public override string DataSource =>
-            State == ConnectionState.Open
-                ? NativeMethods.sqlite3_db_filename(_db, MainDatabaseName)
-                : ConnectionStringBuilder.DataSource;
+        public override string DataSource
+        {
+            get
+            {
+                string dataSource = null;
+                if (State == ConnectionState.Open)
+                {
+                    dataSource = VersionedMethods.GetFilename(_db, MainDatabaseName);
+                }
+
+                return dataSource ?? ConnectionStringBuilder.DataSource;
+            }
+        }
 
         /// <summary>
         /// Corresponds to the version of the SQLite library used by the connection.
@@ -93,63 +105,110 @@ namespace Microsoft.Data.Sqlite
                 throw new InvalidOperationException(Strings.OpenRequiresSetConnectionString);
             }
 
-            var flags = Constants.SQLITE_OPEN_READWRITE | Constants.SQLITE_OPEN_CREATE;
-            flags |= (ConnectionStringBuilder.Cache == SqliteConnectionCacheMode.Shared) ? Constants.SQLITE_OPEN_SHAREDCACHE : Constants.SQLITE_OPEN_PRIVATECACHE;
 
-            var path = AdjustForRelativeDirectory(ConnectionStringBuilder.DataSource);
 
-            var rc = NativeMethods.sqlite3_open_v2(path, out _db, flags, vfs: null);
+            var filename = ConnectionStringBuilder.DataSource;
+            var flags = 0;
+
+            if (filename.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                flags |= SQLITE_OPEN_URI;
+            }
+
+            switch (ConnectionStringBuilder.Mode)
+            {
+                case SqliteOpenMode.ReadOnly:
+                    flags |= SQLITE_OPEN_READONLY;
+                    break;
+
+                case SqliteOpenMode.ReadWrite:
+                    flags |= SQLITE_OPEN_READWRITE;
+                    break;
+
+                case SqliteOpenMode.Memory:
+                    flags |= SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_MEMORY;
+                    if ((flags & SQLITE_OPEN_URI) == 0)
+                    {
+                        flags |= SQLITE_OPEN_URI;
+                        filename = "file:" + filename;
+                    }
+                    break;
+
+                default:
+                    Debug.Assert(
+                        ConnectionStringBuilder.Mode == SqliteOpenMode.ReadWriteCreate,
+                        "ConnectionStringBuilder.Mode is not ReadWriteCreate");
+                    flags |= SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+                    break;
+            }
+
+            switch (ConnectionStringBuilder.Cache)
+            {
+                case SqliteCacheMode.Shared:
+                    flags |= SQLITE_OPEN_SHAREDCACHE;
+                    break;
+
+                case SqliteCacheMode.Private:
+                    flags |= SQLITE_OPEN_PRIVATECACHE;
+                    break;
+
+                default:
+                    Debug.Assert(
+                        ConnectionStringBuilder.Cache == SqliteCacheMode.Default,
+                        "ConnectionStringBuilder.Cache is not Default.");
+                    break;
+            }
+
+            if ((flags & SQLITE_OPEN_URI) == 0
+                && !filename.Equals(":memory:", StringComparison.OrdinalIgnoreCase)
+                && !Path.IsPathRooted(filename))
+            {
+                filename = Path.GetFullPath(Path.Combine(BaseDirectory, filename));
+            }
+
+            var rc = NativeMethods.sqlite3_open_v2(filename, out _db, flags, vfs: null);
             MarshalEx.ThrowExceptionForRC(rc, _db);
+
             SetState(ConnectionState.Open);
 
-            SetFolders();
+            OnOpened();
         }
 
-#if !NETCORE50
-        private void SetFolders() { }
+        partial void OnOpened();
 
-        private string AdjustForRelativeDirectory(string path)
-            => path;
+#if NETCORE50
+        partial void OnOpened()
+        {
+            var appDataType = CurrentApplicationData?.GetType();
+            var temporaryFolder = appDataType?.GetRuntimeProperty("TemporaryFolder").GetValue(CurrentApplicationData);
+            var temporaryFolderPath = temporaryFolder?.GetType().GetRuntimeProperty("Path").GetValue(temporaryFolder) as string;
+            if (temporaryFolderPath != null)
+            {
+                DbConnectionExtensions.ExecuteNonQuery(this, "PRAGMA temp_store_directory = '" + temporaryFolderPath + "';");
+            }
+        }
+
+        private static object CurrentApplicationData
+            => Type.GetType("Windows.Storage.ApplicationData, Windows, ContentType=WindowsRuntime")
+                ?.GetRuntimeProperty("Current").GetValue(null);
+
+        private static string BaseDirectory
+        {
+            get
+            {
+                var appDataType = CurrentApplicationData?.GetType();
+                var localFolder = appDataType?.GetRuntimeProperty("LocalFolder").GetValue(CurrentApplicationData);
+                return (localFolder?.GetType().GetRuntimeProperty("Path").GetValue(localFolder) as string)
+                    ?? AppContext.BaseDirectory;
+            }
+        }
+#elif NET451
+        private static string BaseDirectory
+            => AppDomain.CurrentDomain.GetData("APP_CONTEXT_BASE_DIRECTORY") as string
+                ?? AppDomain.CurrentDomain.BaseDirectory;
 #else
-        private string AdjustForRelativeDirectory(string path)
-        {
-            var appData = GetApplicationData();
-            try
-            {
-                if (appData == null || Path.IsPathRooted(path))
-                {
-                    return path;
-                }
-
-                return Path.GetFullPath(Path.Combine(appData.LocalFolder.Path, path));
-            }
-            catch (NotSupportedException)
-            {
-                Debug.WriteLine("Could not adjust relative path for use on UWP.");
-            }
-            return path;
-        }
-
-        private void SetFolders()
-        {
-            var appData = GetApplicationData();
-
-            if (appData == null)
-            {
-                return;
-            }
-
-            var commandText = "PRAGMA temp_store_directory = '" + appData.TemporaryFolder.Path + "'";
-            DbConnectionExtensions.ExecuteNonQuery(this, commandText);
-        }
-
-        private static dynamic GetApplicationData()
-        {
-            var appDataType = Type.GetType("Windows.Storage.ApplicationData, Windows, ContentType=WindowsRuntime", throwOnError: false);
-            var appData = (dynamic)appDataType?.GetTypeInfo()
-                .GetDeclaredProperty("Current").GetMethod.Invoke(null, null);
-            return appData;
-        }
+        private static string BaseDirectory
+            => AppContext.BaseDirectory;
 #endif
 
         public override void Close()
@@ -199,6 +258,18 @@ namespace Microsoft.Data.Sqlite
         public override void ChangeDatabase(string databaseName)
         {
             throw new NotSupportedException();
+        }
+
+        public virtual void EnableExtensions(bool enable = true)
+        {
+            if (_db == null
+                || _db.IsInvalid)
+            {
+                throw new InvalidOperationException(Strings.FormatCallRequiresOpenConnection(nameof(EnableExtensions)));
+            }
+
+            var rc = NativeMethods.sqlite3_enable_load_extension(_db, enable ? 1 : 0);
+            MarshalEx.ThrowExceptionForRC(rc, _db);
         }
     }
 }

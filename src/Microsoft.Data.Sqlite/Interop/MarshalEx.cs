@@ -5,6 +5,8 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using static Microsoft.Data.Sqlite.Interop.Constants;
+
 namespace Microsoft.Data.Sqlite.Interop
 {
     internal static class MarshalEx
@@ -53,15 +55,15 @@ namespace Microsoft.Data.Sqlite.Interop
 
         public static void ThrowExceptionForRC(int rc, Sqlite3Handle db)
         {
-            if (rc == Constants.SQLITE_OK
-                || rc == Constants.SQLITE_ROW
-                || rc == Constants.SQLITE_DONE)
+            if (rc == SQLITE_OK
+                || rc == SQLITE_ROW
+                || rc == SQLITE_DONE)
             {
                 return;
             }
 
             var message = db == null || db.IsInvalid
-                ? NativeMethods.sqlite3_errstr(rc)
+                ? VersionedMethods.GetErrorString(rc)
                 : NativeMethods.sqlite3_errmsg(db);
 
             throw new SqliteException(Strings.FormatSqliteNativeError(rc, message), rc);

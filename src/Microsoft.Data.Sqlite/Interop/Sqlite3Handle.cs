@@ -4,6 +4,8 @@
 using System;
 using System.Runtime.InteropServices;
 
+using static Microsoft.Data.Sqlite.Interop.Constants;
+
 namespace Microsoft.Data.Sqlite.Interop
 {
     internal class Sqlite3Handle : SafeHandle
@@ -17,10 +19,10 @@ namespace Microsoft.Data.Sqlite.Interop
 
         protected override bool ReleaseHandle()
         {
-            var rc = NativeMethods.sqlite3_close_v2(handle);
+            var rc = VersionedMethods.Close(handle);
             handle = IntPtr.Zero;
 
-            return rc == Constants.SQLITE_OK;
+            return rc == SQLITE_OK;
         }
     }
 }
